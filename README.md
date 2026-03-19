@@ -1,45 +1,28 @@
 ---
-# Практическое задание 18
+# Практическое задание 19
 
 ## ЭФМО-02-25 
 
 ## Алиев Каяхан Командар оглы
 ---
 # Тема работы
-gRPC: создание простого микросервиса, вызовы методов
+Структурированное логирование в серверных приложениях.
 
 ## Цели занятия
-Научиться работать с gRPC: описывать контракт в .proto, поднимать gRPC-сервер и вызывать его из другого сервиса (клиента) с дедлайном.
+Научиться внедрять структурированные логи в сервис и применять единый стандарт логирования для диагностики и эксплуатации.
 
 ## Структура проекта
-![alt text](img/image.png)
+<img width="423" height="299" alt="image" src="https://github.com/user-attachments/assets/2a469ff7-c8d2-416e-b788-100d3422b63b" />
+<p><img width="284" height="645" alt="image" src="https://github.com/user-attachments/assets/dd7de4e3-5417-49ba-87ca-a984fdef9594" /></p>
 
-## Основные компоненты
-Учебная система состоит из двух компонентов:
-### Auth service (теперь имеет gRPC сервер)
-### Tasks service (HTTP API остаётся, но проверка идёт через gRPC)
-### Контракт Proto
-```protobuf
-syntax = "proto3";
+## Ключевая идея работы
+Правильные логи — это не “печать строк”. Это события + поля, которые можно фильтровать, искать и анализировать. Поэтому в рамках задания требуется:
+1.	Структурированный формат (желательно JSON).
+2.	Единый набор полей во всех сервисах.
+3.	Логирование жизненного цикла запроса: вход → обработка → выход.
+4.	Корреляция через X-Request-ID.
 
-package auth;
-
-option go_package = "tech-ip-sem2/services/auth/pkg/authpb";
-
-service AuthService {
-  rpc Verify(VerifyRequest) returns (VerifyResponse);
-}
-
-message VerifyRequest {
-  string token = 1;
-}
-
-message VerifyResponse {
-  bool valid = 1;
-  string subject = 2;
-  string error = 3;
-}
-```
+Для реализации логирования был выбран zap, потому что на проде он чаще благодаря своей скорости и JSON по умолчанию
 
 ## Коды статуса:
 -	200 OK — успешный ответ
@@ -60,14 +43,13 @@ Go: версия 1.25.1
 
 
 # Команды запуска/сборки
-Для запуска http нужно выполнить 4 шага:
 ## 1) Клонировать данный репозиторий в удобную для вас папку:
 ```Powershell
-git clone https://github.com/kayahan81/pz18
+git clone https://github.com/kayahan81/pz19
 ```
-## 2) Перейти в папку http:
+## 2) Перейти в папку pz19:
 ```Powershell
-cd pz18
+cd pz19
 ```
 ## 3) Загрузка зависимостей:
 ```Powershell
@@ -89,23 +71,54 @@ go run ./services/tasks/cmd/tasks
 
 # Проверка работоспособности
 ## Получение токена
-![alt text](<img/Получить токен.PNG>)
+<img width="939" height="361" alt="image" src="https://github.com/user-attachments/assets/156398bb-a014-4390-9420-779a02febff0" />
+
+### Логи auth
+2026-03-18T18:26:20.855+0300    ←[34mINFO←[0m   handler/auth.go:54      login attempt   {"service": "auth", "request_id": "122f45540b754db7", "username": "student"}
+2026-03-18T18:26:20.855+0300    ←[34mINFO←[0m   handler/auth.go:64      login successful        {"service": "auth", "request_id": "122f45540b754db7", "username": "student"}
+2026-03-18T18:26:20.855+0300    ←[34mINFO←[0m   middleware/accesslog.go:27      request completed       {"service": "auth", "request_id": "122f45540b754db7", "method": "POST", "path": "/v1/auth/login", "status": 200, "duration_ms": 0, "remote_ip": "[::1]:49501", "user_agent": "PostmanRuntime/7.52.0"}
+
 ## Запрос с токеном
-![alt text](<img/Проверить токен напрямую.PNG>)
-## Проверка отображения в логах
-![alt text](img/image2.png)
+<img width="830" height="473" alt="image" src="https://github.com/user-attachments/assets/fc80bb5a-8000-49df-8fe6-90371d965219" />
+
+### Логи auth
+2026-03-18T18:28:51.280+0300    ←[34mINFO←[0m   grpc/server.go:43       gRPC: token verified    {"service": "auth", "subject": "student"}
+2026-03-18T18:28:57.468+0300    ←[34mINFO←[0m   handler/auth.go:54      login attempt   {"service": "auth", "request_id": "86bc13cde0bb4a4e", "username": "student"}
+2026-03-18T18:28:57.468+0300    ←[34mINFO←[0m   handler/auth.go:64      login successful        {"service": "auth", "request_id": "86bc13cde0bb4a4e", "username": "student"}
+2026-03-18T18:28:57.468+0300    ←[34mINFO←[0m   middleware/accesslog.go:27      request completed       {"service": "auth", "request_id": "86bc13cde0bb4a4e", "method": "POST", "path": "/v1/auth/login", "status": 200, "duration_ms": 0, "remote_ip": "[::1]:56357", "user_agent": "PostmanRuntime/7.52.0"}
+
+### Логи tasks
+2026-03-18T18:28:51.281+0300    ←[34mINFO←[0m   authgrpc/client.go:76   auth response   {"service": "tasks", "request_id": "test-log-001", "component": "auth_client", "valid": true, "subject": "student", "duration_ms": 0.01387}
+2026-03-18T18:28:51.281+0300    ←[34mINFO←[0m   middleware/auth.go:68   token validated {"service": "tasks", "request_id": "test-log-001", "component": "auth_middleware", "subject": "student"}
+2026-03-18T18:28:51.281+0300    ←[34mINFO←[0m   handler/tasks.go:45     task created    {"service": "tasks", "request_id": "test-log-001", "handler": "CreateTask", "task_id": "t_177384", "title": "Логирование"}
+2026-03-18T18:28:51.283+0300    ←[34mINFO←[0m   middleware/accesslog.go:27      request completed       {"service": "tasks", "request_id": "test-log-001", "method": "POST", "path": "/v1/tasks", "status": 201, "duration_ms": 15, "remote_ip": "[::1]:56288", "user_agent": "PostmanRuntime/7.52.0"}
+
+## Запрос без токена
+<img width="628" height="331" alt="image" src="https://github.com/user-attachments/assets/57bd6645-07de-4567-a894-bd68afdc35c3" />
+
+### Логи auth
+2026-03-18T18:29:55.557+0300    ←[33mWARN←[0m   grpc/server.go:50       gRPC: invalid token     {"service": "auth"}
+
+### Логи tasks
+2026-03-18T18:29:55.557+0300    ←[34mINFO←[0m   authgrpc/client.go:76   auth response   {"service": "tasks", "request_id": "test-log-002", "component": "auth_client", "valid": false, "subject": "", "duration_ms": 0}
+2026-03-18T18:29:55.558+0300    ←[33mWARN←[0m   middleware/auth.go:50   invalid token   {"service": "tasks", "request_id": "test-log-002", "component": "auth_middleware"}
+2026-03-18T18:29:55.558+0300    ←[34mINFO←[0m   middleware/accesslog.go:27      request completed       {"service": "tasks", "request_id": "test-log-002", "method": "GET", "path": "/v1/tasks", "status": 401, "duration_ms": 0, "remote_ip": "[::1]:56288", "user_agent": "PostmanRuntime/7.52.0"}
+
 ## Auth остановлен
-![alt text](<img/Проверка недоступности Auth.PNG>)
+<img width="441" height="325" alt="image" src="https://github.com/user-attachments/assets/a55462f2-3db7-4403-a986-f036ce602939" />
+
+### Логи tasks
+2026-03-18T18:31:23.200+0300    ←[31mERROR←[0m  authgrpc/client.go:65   auth unavailable        {"service": "tasks", "request_id": "test-log-004", "component": "auth_client", "duration_ms": 0.0005144}
+
 
 # Ответы на вопросы
-1. Что такое .proto и почему он считается контрактом?
-.proto — это файл, в котором на языке Protocol Buffers описываются структуры данных и методы сервиса. Он считается контрактом, потому что строго определяет, какие запросы и ответы могут передаваться между сервисами, и любое изменение требует явного согласования.
-
-2. Что такое deadline в gRPC и чем он полезен?
-Deadline — это максимальное время ожидания ответа от сервера, которое клиент устанавливает для каждого вызова. Он полезен тем, что предотвращает зависание клиента при недоступности сервера и позволяет быстро возвращать ошибки типа DeadlineExceeded.
-
-3. Почему “exactly-once” не даётся просто так даже в RPC?
-Из-за возможных сбоев сети, таймаутов и повторных отправок сервер может получить запрос несколько раз, а клиент — не получить подтверждение. Гарантия ровно одного выполнения требует идемпотентности или распределённых транзакций, что сложно реализовать.
-
-4. Как обеспечивать совместимость при расширении .proto?
-Использовать правила Protocol Buffers: добавлять новые поля с уникальными номерами, не менять типы и номера существующих полей, помечать необязательные поля как optional. Это позволяет старым клиентам работать с новыми серверами и наоборот.
+1.	Почему структурированные логи удобнее строковых?
+Структурированные логи удобнее, потому что они представляют данные в машиночитаемом формате (например, JSON), что позволяет их легко фильтровать, искать и анализировать с помощью специализированных инструментов, в отличие от простого текста.
+2.	Что такое request-id и как он помогает при диагностике?
+Request-ID — это уникальный идентификатор запроса, который пробрасывается через все сервисы, позволяя связать воедино все события и логи, относящиеся к одному пользовательскому запросу, что критически упрощает отладку распределенных систем.
+3.	Какие поля вы считаете обязательными для access log?
+Обязательные поля для access log: request_id, method, path, status, duration_ms, remote_ip, user_agent.
+4.	Почему нельзя писать токены и пароли в логи?
+Нельзя писать токены и пароли в логи, потому что это прямая утечка секретных данных и угроза безопасности, которая может привести к компрометации учетных записей и системы в целом.
+5.	Что логировать в ERROR, а что в INFO/WARN?
+В ERROR логируются критическое проблемы, требующие вмешательства (ошибки БД, недоступность сервисов), а в INFO/WARN — штатные события (запросы, валидации) и нештатные ситуации, которые не ломают систему, но важны для мониторинга.
